@@ -5,7 +5,7 @@
 # License   : BSD License                       <http://ffctn.com/licenses/bsd>
 # -----------------------------------------------------------------------------
 # Creation  : 21-Sep-2009
-# Last mod  : 14-Aug-2012
+# Last mod  : 25-Mar-2013
 # -----------------------------------------------------------------------------
 
 import sys, smtplib, json, time, socket, types, string
@@ -59,7 +59,8 @@ TRACE    = 1
 INFO     = 2
 WARNING  = 3
 ERROR    = 4
-FATAL = 5
+FATAL    = 5
+DEFAULT_LEVEL = 2
 
 # ------------------------------------------------------------------------------
 #
@@ -67,6 +68,7 @@ FATAL = 5
 #
 # ------------------------------------------------------------------------------
 
+# FIXME: Should aggregate message when there's no delegate
 class Reporter:
 	"""Abstract class that defines the main (abstract) methods for an error
 	reporter."""
@@ -88,14 +90,14 @@ class Reporter:
 			self.INSTANCE = self(*args)
 		return self.INSTANCE
 
-	def __init__( self, level=0 ):
-		self.level     = level
+	def __init__( self, level=None ):
 		self.delegates = []
+		self.setLevel(level if level is not None else DEFAULT_LEVEL)
 
-	def level( self, level=None ):
-		if level is not None:
-			self.level = level
-		return self.level
+	def setLevel( self, level ):
+		self.level = level
+		for _ in self.delegates:_.setLevel(level)
+		return self
 
 	def has( self, reporterClass ):
 		for _ in self.delegates:
@@ -106,6 +108,7 @@ class Reporter:
 	def register( self, *reporters ):
 		for reporter in reporters:
 			if reporter not in self.delegates:
+				reporter.level = self.level
 				self.delegates.append(reporter)
 	
 	def unregister( self, *reporters ):
@@ -118,35 +121,35 @@ class Reporter:
 
 	def debug( self, message, component, code=None ):
 		if DEBUG >= self.level:
-			self._send(DEBUG, self.TEMPLATES[DEBUG] % (self.timestamp(), code or "-", component, message))
+			self._send(DEBUG, self.TEMPLATES[DEBUG] % (self.timestamp(), code or "-", component or "-", message))
 
 	def trace( self, message, component, code=None ):
 		if TRACE >= self.level:
-			self._send(TRACE, self.TEMPLATES[TRACE] % (self.timestamp(), code or "-", component, message))
+			self._send(TRACE, self.TEMPLATES[TRACE] % (self.timestamp(), code or "-", component or "-", message))
 
 	def info( self, message, component, code=None ):
 		"""Sends an info with the given message (as a string) and
 		component (as a string)."""
 		if INFO >= self.level:
-			self._send(INFO, self.TEMPLATES[INFO] % (self.timestamp(), code or "-", component, message))
+			self._send(INFO, self.TEMPLATES[INFO] % (self.timestamp(), code or "-", component or "-", message))
 
 	def warning( self, message, component, code=None ):
 		"""Sends a warning with the given message (as a string) and
 		component (as a string)."""
 		if WARNING >= self.level:
-			self._send(WARNING, self.TEMPLATES[WARNING] % (self.timestamp(), code or "-", component, message))
+			self._send(WARNING, self.TEMPLATES[WARNING] % (self.timestamp(), code or "-", component or "-", message))
 
 	def error( self, message, component, code=None ):
 		"""Sends an error with the given message (as a string) and
 		component (as a string)."""
 		if ERROR >= self.level:
-			self._send(ERROR, self.TEMPLATES[ERROR] % (self.timestamp(),code or "-", component, message))
+			self._send(ERROR, self.TEMPLATES[ERROR] % (self.timestamp(),code or "-", component or "-", message))
 
 	def fatal( self, message, component, code=None ):
 		"""Sends a fatal error with the given message (as a string) and
 		component (as a string)."""
 		if FATAL >= self.level:
-			self._send(FATAL, self.TEMPLATES[FATAL] % (self.timestamp(), code or "-", component, message))
+			self._send(FATAL, self.TEMPLATES[FATAL] % (self.timestamp(), code or "-", component or "-", message))
 
 	def _send( self, level, message ):
 		self._forward(level, message)
@@ -469,10 +472,15 @@ def register( *reporter, **options ):
 	"""Registers the reporter instance(s) in the `REPORTER` singleton."""
 	res    = []
 	unique = True if "unique" not in options else options.get("unique")
+	if "level" in options: setLevel(options["level"])
 	for _ in reporter:
 		if (not unique) or (not REPORTER.has(_.__class__)):
 			res.append(REPORTER.register(_))
-	return res
+	return REPORTER
+
+def setLevel( l ):
+	REPORTER.setLevel(l)
+	return REPORTER
 
 def unregister( *repporter ):
 	"""Unegisters the reporter instance(s) in the `REPORTER` singleton."""
@@ -488,6 +496,9 @@ def info( message, component=None, code=None ):
 	return REPORTER.info(message, component, code)
 
 def warning( message, component=None, code=None ):
+	return REPORTER.warning(message, component, code)
+
+def warn( message, component=None, code=None ):
 	return REPORTER.warning(message, component, code)
 
 def error( message, component=None, code=None ):
