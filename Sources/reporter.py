@@ -5,10 +5,10 @@
 # License   : BSD License                       <http://ffctn.com/licenses/bsd>
 # -----------------------------------------------------------------------------
 # Creation  : 21-Sep-2009
-# Last mod  : 25-Mar-2013
+# Last mod  : 28-Oct-2013
 # -----------------------------------------------------------------------------
 
-import sys, smtplib, json, time, socket, types, string
+import sys, smtplib, json, time, socket, types, string, collections
 
 # TODO: Add info
 # TODO: Add better message formatting
@@ -17,6 +17,11 @@ import sys, smtplib, json, time, socket, types, string
 #
 # [!] WARNING:-:module.Class.methodName:Your message (var=xx,var=xx)
 
+LoggingInterface  = collections.namedtuple("LoggingInterface",(
+	"debug","trace", "info", "warning", "error", "fatal"
+))
+
+__version__ = "0.5.0"
 __doc__ = """
 The reporter module defines a simple interface to report errors that may occur
 during program execution. Errors are composed of the following property:
@@ -85,10 +90,16 @@ class Reporter:
 	INSTANCE = None
 
 	@classmethod
-	def GetInstance( self, *args ):
-		if not self.INSTANCE:
-			self.INSTANCE = self(*args)
-		return self.INSTANCE
+	def GetInstance( cls, *args ):
+		if not cls.INSTANCE:
+			cls.INSTANCE = cls(*args)
+		return cls.INSTANCE
+
+	@classmethod
+	def Install( cls, *args ):
+		l = cls.GetInstance(*args)
+		register(l)
+		return
 
 	def __init__( self, level=None ):
 		self.delegates = []
@@ -110,7 +121,7 @@ class Reporter:
 			if reporter not in self.delegates:
 				reporter.level = self.level
 				self.delegates.append(reporter)
-	
+
 	def unregister( self, *reporters ):
 		for reporter in reporters:
 			assert (reporter in self.delegates), "Reporter not registered as a delegate"
@@ -121,35 +132,35 @@ class Reporter:
 
 	def debug( self, message, component, code=None ):
 		if DEBUG >= self.level:
-			self._send(DEBUG, self.TEMPLATES[DEBUG] % (self.timestamp(), code or "-", component or "-", message))
+			self._send(DEBUG, self.TEMPLATES[DEBUG] % (self.timestamp(), code or "-", self._getComponent(component), message))
 
 	def trace( self, message, component, code=None ):
 		if TRACE >= self.level:
-			self._send(TRACE, self.TEMPLATES[TRACE] % (self.timestamp(), code or "-", component or "-", message))
+			self._send(TRACE, self.TEMPLATES[TRACE] % (self.timestamp(), code or "-", self._getComponent(component), message))
 
 	def info( self, message, component, code=None ):
 		"""Sends an info with the given message (as a string) and
 		component (as a string)."""
 		if INFO >= self.level:
-			self._send(INFO, self.TEMPLATES[INFO] % (self.timestamp(), code or "-", component or "-", message))
+			self._send(INFO, self.TEMPLATES[INFO] % (self.timestamp(), code or "-", self._getComponent(component), message))
 
 	def warning( self, message, component, code=None ):
 		"""Sends a warning with the given message (as a string) and
 		component (as a string)."""
 		if WARNING >= self.level:
-			self._send(WARNING, self.TEMPLATES[WARNING] % (self.timestamp(), code or "-", component or "-", message))
+			self._send(WARNING, self.TEMPLATES[WARNING] % (self.timestamp(), code or "-", self._getComponent(component), message))
 
 	def error( self, message, component, code=None ):
 		"""Sends an error with the given message (as a string) and
 		component (as a string)."""
 		if ERROR >= self.level:
-			self._send(ERROR, self.TEMPLATES[ERROR] % (self.timestamp(),code or "-", component or "-", message))
+			self._send(ERROR, self.TEMPLATES[ERROR] % (self.timestamp(),code or "-", self._getComponent(component), message))
 
 	def fatal( self, message, component, code=None ):
 		"""Sends a fatal error with the given message (as a string) and
 		component (as a string)."""
 		if FATAL >= self.level:
-			self._send(FATAL, self.TEMPLATES[FATAL] % (self.timestamp(), code or "-", component or "-", message))
+			self._send(FATAL, self.TEMPLATES[FATAL] % (self.timestamp(), code or "-", self._getComponent(component), message))
 
 	def _send( self, level, message ):
 		self._forward(level, message)
@@ -157,6 +168,16 @@ class Reporter:
 	def _forward( self, level, message ):
 		for delegate in self.delegates:
 			delegate._send(level, message)
+
+	def _getComponent( self, component ):
+		if not component:
+			return "-"
+		elif isinstance(component, str):
+			return component
+		elif hasattr(component, "__name__"):
+			return component.__name__
+		else:
+			return component.__class__.__name__
 
 # ------------------------------------------------------------------------------
 #
@@ -216,7 +237,7 @@ class ConsoleReporter(FileReporter):
 		FileReporter.__init__(self, fd=fd, level=level)
 		self.color        = color
 		self.colorByLevel = [
-			self.COLOR_DARK_GRAY,     # DEBUG
+			self.COLOR_CYAN_BOLD,     # DEBUG
 			self.COLOR_LIGHT_GRAY,    # TRACE
 			self.COLOR_NONE,          # INFO
 			self.COLOR_MAGENTA_BOLD,  # WARNING
@@ -346,7 +367,7 @@ class SMTPReporter(Reporter):
 		except:
 			pass
 		return email
-	
+
 	def _send( self, level, message ):
 		self.send(message, "[!][%s]FF-Collector: %s" % (level, message[:30]))
 
@@ -393,7 +414,7 @@ class BeanstalkReporter(Reporter):
 			self.connect()
 		except socket.error, e:
 			print "[!] BeanstalkWorker cannot connect to beanstalkd server"
-	
+
 	def connect( self ):
 		import beanstalkc
 		self.beanstalkc = beanstalkc
@@ -530,7 +551,7 @@ def bind( component ):
 			def _(*args,**kwargs):
 				function(" ".join(map(str,args)), component, code=kwargs.get("code"))
 			return _
-		return (
+		return LoggingInterface(
 			wrap(debug),
 			wrap(trace),
 			wrap(info),
@@ -540,6 +561,8 @@ def bind( component ):
 		)
 	else:
 		raise Exception("reporter.bind: Unsupported type: %s" % (type(component)))
+
+
 
 if __name__ == "__main__":
 	register(ConsoleReporter(), unique=True)
