@@ -112,7 +112,7 @@ class Reporter:
 
 	def has( self, reporterClass ):
 		for _ in self.delegates:
-			if isinstance(_, reporterClass):
+			if _.__class__ is reporterClass:
 				return True
 		return False
 
