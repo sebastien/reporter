@@ -18,9 +18,10 @@ import sys, smtplib, json, time, socket, types, string, collections
 # [!] WARNING:-:module.Class.methodName:Your message (var=xx,var=xx)
 
 LoggingInterface  = collections.namedtuple("LoggingInterface",(
-	"debug","trace", "info", "warning", "error", "fatal"
+	"debug", "trace", "info", "warning", "error", "fatal"
 ))
 
+IS_REPORTER = True
 __version__ = "0.5.0"
 __doc__ = """
 The reporter module defines a simple interface to report errors that may occur
@@ -528,8 +529,8 @@ def error( message, component=None, code=None ):
 def fatal( message, component=None, code=None ):
 	return REPORTER.fatal(message, component, code)
 
-def bind( component ):
-	"""Returns `(info,warning,error,fatal)` functions that take `(message,code=None)`
+def bind( component, name=None):
+	"""Returns `(debug,trace,info,warning,error,fatal)` functions that take `(message,code=None)`
 	as parameters. This should be used in the following way, at the head of a
 	module:
 
@@ -545,7 +546,7 @@ def bind( component ):
 		component.info,
 		component.warning,
 		component.error,
-		component.fatal) = bind(component.__class__.__name__)
+		component.fatal) = bind(name or component.__class__.__name__)
 	elif type(component) in (str, unicode):
 		def wrap(function):
 			def _(*args,**kwargs):
