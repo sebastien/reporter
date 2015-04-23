@@ -17,6 +17,17 @@ import sys, smtplib, json, time, socket, types, string, collections
 #
 # [!] WARNING:-:module.Class.methodName:Your message (var=xx,var=xx)
 
+#   CRITICAL = 50
+#   DEBUG = 10
+#   ERROR = 40
+#   FATAL = 50
+#   INFO = 20
+#   NOTSET = 0
+#   WARN = 30
+#   WARNING = 30
+
+
+# TODO: Mirror logging
 LoggingInterface  = collections.namedtuple("LoggingInterface",(
 	"debug", "trace", "info", "warning", "error", "fatal"
 ))
@@ -388,7 +399,7 @@ class XMPPReporter(Reporter):
 		self._sendMessage = None
 		try:
 			self._sendMessage = pyxmpp2.simple.send_message
-		except ImportError, e:
+		except ImportError as e:
 			raise Exception("PyXMPP2 Module is required for Jabber reporting")
 
 	def _send( self, level, message):
@@ -413,8 +424,8 @@ class BeanstalkReporter(Reporter):
 		self.beanstalk = None
 		try:
 			self.connect()
-		except socket.error, e:
-			print "[!] BeanstalkWorker cannot connect to beanstalkd server"
+		except socket.error as e:
+			print ("[!] BeanstalkWorker cannot connect to beanstalkd server")
 
 	def connect( self ):
 		import beanstalkc
@@ -430,7 +441,7 @@ class BeanstalkReporter(Reporter):
 				"level"   : level,
 			}))
 		else:
-			print "[!] BeanstalkWorker cannot connect to beanstalkd server"
+			print ("[!] BeanstalkWorker cannot connect to beanstalkd server")
 
 # ------------------------------------------------------------------------------
 #
@@ -463,7 +474,7 @@ class BeanstalkWorker:
 	def _iterate( self ):
 		try:
 			job  = self.beanstalk.reserve()
-		except (self.beanstalkc.DeadlineSoon, self.beanstalkc.CommandFailed, self.beanstalkc.UnexpectedResponse), e:
+		except (self.beanstalkc.DeadlineSoon, self.beanstalkc.CommandFailed, self.beanstalkc.UnexpectedResponse) as e:
 			reporter.error(str(e), "beanstalkc")
 			return False
 		# We make sure that the job is JSON
@@ -500,13 +511,16 @@ def register( *reporter, **options ):
 			res.append(REPORTER.register(_))
 	return REPORTER
 
+def unregister( *reporter ):
+	"""Unegisters the reporter instance(s) in the `REPORTER` singleton."""
+	return REPORTER.unregister(*reporter)
+
 def setLevel( l ):
 	REPORTER.setLevel(l)
 	return REPORTER
 
-def unregister( *repporter ):
-	"""Unegisters the reporter instance(s) in the `REPORTER` singleton."""
-	return REPORTER.unregister(*reporter)
+def install( channel=None, level=TRACE ):
+	return register(channel or StdoutReporter()).setLevel(level)
 
 def debug( message, component=None, code=None ):
 	return REPORTER.debug(message, component, code)
