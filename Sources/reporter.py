@@ -1,3 +1,4 @@
+# Encoding: utf-8
 # -----------------------------------------------------------------------------
 # Project   : Reporter
 # -----------------------------------------------------------------------------
@@ -5,7 +6,7 @@
 # License   : BSD License                       <http://ffctn.com/licenses/bsd>
 # -----------------------------------------------------------------------------
 # Creation  : 21-Sep-2009
-# Last mod  : 28-Oct-2013
+# Last mod  : 11-Feb-2016
 # -----------------------------------------------------------------------------
 
 import sys, smtplib, json, time, socket, types, string, collections
@@ -33,7 +34,7 @@ LoggingInterface  = collections.namedtuple("LoggingInterface",(
 ))
 
 IS_REPORTER = True
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 __doc__ = """
 The reporter module defines a simple interface to report errors that may occur
 during program execution. Errors are composed of the following property:
@@ -79,6 +80,22 @@ ERROR    = 4
 FATAL    = 5
 DEFAULT_LEVEL = 2
 
+COLOR_NONE         = -1
+COLOR_BLACK        = 1
+COLOR_RED          = 2
+COLOR_GREEN        = 3
+COLOR_BLUE         = 4
+COLOR_MAGENTA      = 5
+COLOR_CYAN         = 6
+COLOR_BLACK_BOLD   = 11
+COLOR_RED_BOLD     = 12
+COLOR_GREEN_BOLD   = 13
+COLOR_BLUE_BOLD    = 14
+COLOR_MAGENTA_BOLD = 15
+COLOR_CYAN_BOLD    = 16
+COLOR_LIGHT_GRAY   = 17
+COLOR_DARK_GRAY    = 18
+
 # ------------------------------------------------------------------------------
 #
 # REPORTER
@@ -91,12 +108,12 @@ class Reporter:
 	reporter."""
 
 	TEMPLATES = [
-		">>> %s|%s|%s|%s",
-		"--- %s|%s|%s|%s",
-		" -  %s|%s|%s|%s",
-		"WRN %s|%s|%s|%s",
-		"ERR %s|%s|%s|%s",
-		"!!! %s|%s|%s|%s"
+		"▶▶▶ {0}│{2}│{3}",
+		"─── {0}│{2}│{3}",
+		" ┈  {0}│{2}│{3}",
+		"WRN {0}│{2}│{3}",
+		"ERR {0}│{2}│{3}",
+		"!!! {0}│{2}│{3}"
 	]
 
 	INSTANCE = None
@@ -142,44 +159,52 @@ class Reporter:
 	def timestamp( self ):
 		return time.strftime("%Y-%m-%dT%H:%M:%S")
 
-	def debug( self, message, component, code=None ):
+	def debug( self, message, component, code=None, color=None):
 		if DEBUG >= self.level:
-			self._send(DEBUG, self.TEMPLATES[DEBUG] % (self.timestamp(), code or "-", self._getComponent(component), message))
+			self._send(DEBUG, self.TEMPLATES[DEBUG].format(self.timestamp(), code or "-", self._getComponent(component), message))
+		return message
 
-	def trace( self, message, component, code=None ):
+	def trace( self, message, component, code=None, color=None ):
 		if TRACE >= self.level:
-			self._send(TRACE, self.TEMPLATES[TRACE] % (self.timestamp(), code or "-", self._getComponent(component), message))
+			self._send(TRACE, self.TEMPLATES[TRACE].format(self.timestamp(), code or "-", self._getComponent(component), message))
+		return message
 
-	def info( self, message, component, code=None ):
+	def info( self, message, component, code=None, color=None ):
 		"""Sends an info with the given message (as a string) and
 		component (as a string)."""
 		if INFO >= self.level:
-			self._send(INFO, self.TEMPLATES[INFO] % (self.timestamp(), code or "-", self._getComponent(component), message))
+			self._send(INFO, self.TEMPLATES[INFO].format(self.timestamp(), code or "-", self._getComponent(component), message), color=color)
+		return message
 
-	def warning( self, message, component, code=None ):
+	def warning( self, message, component, code=None, color=None):
 		"""Sends a warning with the given message (as a string) and
 		component (as a string)."""
 		if WARNING >= self.level:
-			self._send(WARNING, self.TEMPLATES[WARNING] % (self.timestamp(), code or "-", self._getComponent(component), message))
+			self._send(WARNING, self.TEMPLATES[WARNING].format(self.timestamp(), code or "-", self._getComponent(component), message))
+		return message
 
-	def error( self, message, component, code=None ):
+	def error( self, message, component, code=None, color=None ):
 		"""Sends an error with the given message (as a string) and
 		component (as a string)."""
 		if ERROR >= self.level:
-			self._send(ERROR, self.TEMPLATES[ERROR] % (self.timestamp(),code or "-", self._getComponent(component), message))
+			self._send(ERROR, self.TEMPLATES[ERROR].format(self.timestamp(),code or "-", self._getComponent(component), message))
+		return message
 
-	def fatal( self, message, component, code=None ):
+	def fatal( self, message, component, code=None, color=None ):
 		"""Sends a fatal error with the given message (as a string) and
 		component (as a string)."""
 		if FATAL >= self.level:
-			self._send(FATAL, self.TEMPLATES[FATAL] % (self.timestamp(), code or "-", self._getComponent(component), message))
+			self._send(FATAL, self.TEMPLATES[FATAL].format(self.timestamp(), code or "-", self._getComponent(component), message))
+		return message
 
-	def _send( self, level, message ):
-		self._forward(level, message)
+	def _send( self, level, message, color=None ):
+		self._forward(level, message, color=color )
+		return message
 
-	def _forward( self, level, message ):
+	def _forward( self, level, message, color=None ):
 		for delegate in self.delegates:
-			delegate._send(level, message)
+			delegate._send(level, message, color=color)
+		return message
 
 	def _getComponent( self, component ):
 		if not component:
@@ -209,7 +234,7 @@ class FileReporter(Reporter):
 			assert not (fd is None)
 			self.fd = fd
 
-	def _send( self, level, message ):
+	def _send( self, level, message, color=None ):
 		if self.level > level: return
 		if self.fd is None:
 			# We don't necessarily want this to be alway open
@@ -228,37 +253,21 @@ class FileReporter(Reporter):
 
 class ConsoleReporter(FileReporter):
 
-	COLOR_NONE         = -1
-	COLOR_BLACK        = 1
-	COLOR_RED          = 2
-	COLOR_GREEN        = 3
-	COLOR_BLUE         = 4
-	COLOR_MAGENTA      = 5
-	COLOR_CYAN         = 6
-	COLOR_BLACK_BOLD   = 11
-	COLOR_RED_BOLD     = 12
-	COLOR_GREEN_BOLD   = 13
-	COLOR_BLUE_BOLD    = 14
-	COLOR_MAGENTA_BOLD = 15
-	COLOR_CYAN_BOLD    = 16
-	COLOR_LIGHT_GRAY   = 17
-	COLOR_DARK_GRAY    = 18
-
 	def __init__( self, fd=None, level=0, color=True ):
 		if fd is None: fd = sys.stdout
 		FileReporter.__init__(self, fd=fd, level=level)
 		self.color        = color
 		self.colorByLevel = [
-			self.COLOR_CYAN_BOLD,     # DEBUG
-			self.COLOR_LIGHT_GRAY,    # TRACE
-			self.COLOR_NONE,          # INFO
-			self.COLOR_MAGENTA_BOLD,  # WARNING
-			self.COLOR_RED,           # ERROR
-			self.COLOR_RED_BOLD,      # FATAL
+			COLOR_CYAN_BOLD,     # DEBUG
+			COLOR_LIGHT_GRAY,    # TRACE
+			COLOR_NONE,          # INFO
+			COLOR_MAGENTA_BOLD,  # WARNING
+			COLOR_RED,           # ERROR
+			COLOR_RED_BOLD,      # FATAL
 		]
 
-	def _send( self, level, message ):
-		color = self.getColorForLevel(level)
+	def _send( self, level, message , color=None):
+		color = color or self.getColorForLevel(level)
 		FileReporter._send(self, level, self._colorStart(color) + message + self._colorEnd(color))
 
 	def getColorForLevel( self, level ):
@@ -268,41 +277,41 @@ class ConsoleReporter(FileReporter):
 	def _colorStart( self, color ):
 		# SEE: http://tldp.org/HOWTO/Bash-Prompt-HOWTO/x329.html
 		if not self.color: return ''
-		if   color==self.COLOR_NONE:
+		if   color==COLOR_NONE:
 			return ''
-		elif color==self.COLOR_LIGHT_GRAY:
+		elif color==COLOR_LIGHT_GRAY:
 			return ('[0m[00;37m')
-		elif color==self.COLOR_DARK_GRAY:
+		elif color==COLOR_DARK_GRAY:
 			return ('[0m[01;30m')
-		elif color==self.COLOR_BLACK:
+		elif color==COLOR_BLACK:
 			return ('[0m[00;30m')
-		elif color==self.COLOR_BLACK_BOLD:
+		elif color==COLOR_BLACK_BOLD:
 			return ('[0m[01;30m')
-		elif color==self.COLOR_RED:
+		elif color==COLOR_RED:
 			return ('[0m[00;31m')
-		elif color==self.COLOR_RED_BOLD:
+		elif color==COLOR_RED_BOLD:
 			return ('[0m[01;31m')
-		elif color==self.COLOR_GREEN:
+		elif color==COLOR_GREEN:
 			return ('[0m[00;32m')
-		elif color==self.COLOR_GREEN_BOLD:
+		elif color==COLOR_GREEN_BOLD:
 			return ('[0m[01;32m')
-		elif color==self.COLOR_BLUE:
+		elif color==COLOR_BLUE:
 			return ('[0m[00;34m')
-		elif color==self.COLOR_BLUE_BOLD:
+		elif color==COLOR_BLUE_BOLD:
 			return ('[0m[01;34m')
-		elif color==self.COLOR_MAGENTA:
+		elif color==COLOR_MAGENTA:
 			return ('[0m[00;35m')
-		elif color==self.COLOR_MAGENTA_BOLD:
+		elif color==COLOR_MAGENTA_BOLD:
 			return ('[0m[01;35m')
-		elif color==self.COLOR_CYAN:
+		elif color==COLOR_CYAN:
 			return ('[0m[00;35m')
-		elif color==self.COLOR_CYAN_BOLD:
+		elif color==COLOR_CYAN_BOLD:
 			return ('[0m[01;35m')
 		else:
 			raise Exception("ConsoleReporter._colorStart: Unsupported color", color)
 
 	def _colorEnd( self, color ):
-		if self.color and color != self.COLOR_NONE:
+		if self.color and color != COLOR_NONE:
 			return ('[0m')
 		else:
 			return ''
@@ -402,7 +411,7 @@ class XMPPReporter(Reporter):
 		except ImportError as e:
 			raise Exception("PyXMPP2 Module is required for Jabber reporting")
 
-	def _send( self, level, message):
+	def _send( self, level, message, color=None ):
 		for recipient in self.recipients:
 			iself._sendMessage(self.name, self.password, recipient, message)
 
@@ -433,7 +442,7 @@ class BeanstalkReporter(Reporter):
 		self.beanstalk  = self.beanstalkc.Connection(host=self.host, port=self.port)
 		self.beanstalk.use(self.tube)
 
-	def _send( self, level, message):
+	def _send( self, level, message, color=None ):
 		if self.beanstalk:
 			self.beanstalk.put(json.dumps({
 				"type"    : "reporter.Message",
@@ -520,28 +529,29 @@ def setLevel( l ):
 	return REPORTER
 
 def install( channel=None, level=TRACE ):
+	if channel in (sys.stderr, "stderr", "err"): channel = StderrReporter()
 	return register(channel or StdoutReporter()).setLevel(level)
 
-def debug( message, component=None, code=None ):
-	return REPORTER.debug(message, component, code)
+def debug( message, component=None, code=None, color=None ):
+	return REPORTER.debug(message, component, code, color=color)
 
-def trace( message, component=None, code=None ):
-	return REPORTER.trace(message, component, code)
+def trace( message, component=None, code=None, color=None  ):
+	return REPORTER.trace(message, component, code, color=color)
 
-def info( message, component=None, code=None ):
-	return REPORTER.info(message, component, code)
+def info( message, component=None, code=None, color=None ):
+	return REPORTER.info(message, component, code, color=color)
 
-def warning( message, component=None, code=None ):
-	return REPORTER.warning(message, component, code)
+def warning( message, component=None, code=None, color=None  ):
+	return REPORTER.warning(message, component, code, color=color)
 
-def warn( message, component=None, code=None ):
-	return REPORTER.warning(message, component, code)
+def warn( message, component=None, code=None, color=None  ):
+	return REPORTER.warning(message, component, code, color=color)
 
-def error( message, component=None, code=None ):
-	return REPORTER.error(message, component, code)
+def error( message, component=None, code=None, color=None  ):
+	return REPORTER.error(message, component, code, color=color)
 
-def fatal( message, component=None, code=None ):
-	return REPORTER.fatal(message, component, code)
+def fatal( message, component=None, code=None, color=None  ):
+	return REPORTER.fatal(message, component, code, color=color)
 
 def bind( component, name=None):
 	"""Returns `(debug,trace,info,warning,error,fatal)` functions that take `(message,code=None)`
@@ -564,7 +574,7 @@ def bind( component, name=None):
 	elif type(component) in (str, unicode):
 		def wrap(function):
 			def _(*args,**kwargs):
-				function(" ".join(map(str,args)), component, code=kwargs.get("code"))
+				function(" ".join(map(str,args)), component, code=kwargs.get("code"), color=kwargs.get("color"))
 			return _
 		return LoggingInterface(
 			wrap(debug),
