@@ -6,7 +6,7 @@
 # License   : BSD License                       <http://ffctn.com/licenses/bsd>
 # -----------------------------------------------------------------------------
 # Creation  : 21-Sep-2009
-# Last mod  : 11-Feb-2016
+# Last mod  : 18-Feb-2016
 # -----------------------------------------------------------------------------
 
 import sys, smtplib, json, time, socket, types, string, collections
@@ -33,7 +33,9 @@ LoggingInterface  = collections.namedtuple("LoggingInterface",(
 	"debug", "trace", "info", "warning", "error", "fatal"
 ))
 
-IS_REPORTER = True
+IS_REPORTER  = True
+IS_INSTALLED = False
+
 __version__ = "0.6.0"
 __doc__ = """
 The reporter module defines a simple interface to report errors that may occur
@@ -529,8 +531,14 @@ def setLevel( l ):
 	return REPORTER
 
 def install( channel=None, level=TRACE ):
-	if channel in (sys.stderr, "stderr", "err"): channel = StderrReporter()
-	return register(channel or StdoutReporter()).setLevel(level)
+	global IS_INSTALLED
+	if IS_INSTALLED:
+		IS_INSTALLED = True
+		if channel in (sys.stderr, "stderr", "err"): channel = StderrReporter()
+		return register(channel or StdoutReporter()).setLevel(level)
+	else:
+		return REPORTER.setLevel(level)
+
 
 def debug( message, component=None, code=None, color=None ):
 	return REPORTER.debug(message, component, code, color=color)
@@ -587,7 +595,8 @@ def bind( component, name=None):
 	else:
 		raise Exception("reporter.bind: Unsupported type: %s" % (type(component)))
 
-
+if not IS_INSTALLED:
+	install()
 
 if __name__ == "__main__":
 	register(ConsoleReporter(), unique=True)
