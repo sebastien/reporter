@@ -532,7 +532,7 @@ def setLevel( l ):
 
 def install( channel=None, level=TRACE ):
 	global IS_INSTALLED
-	if IS_INSTALLED:
+	if not IS_INSTALLED:
 		IS_INSTALLED = True
 		if channel in (sys.stderr, "stderr", "err"): channel = StderrReporter()
 		return register(channel or StdoutReporter()).setLevel(level)
