@@ -110,12 +110,12 @@ class Reporter:
 	reporter."""
 
 	TEMPLATES = [
-		"▶▶▶ {0}│{2}│{3}",
-		"─── {0}│{2}│{3}",
-		" ┈  {0}│{2}│{3}",
-		"WRN {0}│{2}│{3}",
-		"ERR {0}│{2}│{3}",
-		"!!! {0}│{2}│{3}"
+		u"▶▶▶ {0}│{2}│{3}",
+		u"─── {0}│{2}│{3}",
+		u" ┈  {0}│{2}│{3}",
+		u"WRN {0}│{2}│{3}",
+		u"ERR {0}│{2}│{3}",
+		u"!!! {0}│{2}│{3}"
 	]
 
 	INSTANCE = None
@@ -241,10 +241,10 @@ class FileReporter(Reporter):
 		if self.fd is None:
 			# We don't necessarily want this to be alway open
 			with file(self.path, "a") as fd:
-				fd.write(message + "\n")
+				fd.write(message.encode("utf8") + b"\n")
 				fd.flush()
 		else:
-			self.fd.write(message + "\n")
+			self.fd.write(message.encode("utf8") + b"\n")
 			self.fd.flush()
 
 # ------------------------------------------------------------------------------
@@ -534,8 +534,9 @@ def install( channel=None, level=TRACE ):
 	global IS_INSTALLED
 	if not IS_INSTALLED:
 		IS_INSTALLED = True
-		if channel in (sys.stderr, "stderr", "err"): channel = StderrReporter()
-		return register(channel or StdoutReporter()).setLevel(level)
+		if channel in (sys.stderr, "stderr", "err"):      channel = StderrReporter()
+		if channel in (sys.stdout, "stdout", "out", "-"): channel = StdoutReporter()
+		return register(channel or StderrReporter()).setLevel(level)
 	else:
 		return REPORTER.setLevel(level)
 
@@ -582,7 +583,7 @@ def bind( component, name=None):
 	elif type(component) in (str, unicode):
 		def wrap(function):
 			def _(*args,**kwargs):
-				function(" ".join(map(str,args)), component, code=kwargs.get("code"), color=kwargs.get("color"))
+				function(u" ".join(map(lambda _:u"{0}".format(_),args)), component, code=kwargs.get("code"), color=kwargs.get("color"))
 			return _
 		return LoggingInterface(
 			wrap(debug),
