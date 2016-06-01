@@ -6,13 +6,16 @@
 # License   : BSD License                       <http://ffctn.com/licenses/bsd>
 # -----------------------------------------------------------------------------
 # Creation  : 21-Sep-2009
-# Last mod  : 18-Feb-2016
+# Last mod  : 01-Jun-2016
 # -----------------------------------------------------------------------------
 
 import sys, smtplib, json, time, socket, types, string, collections
 
 # TODO: Add info
 # TODO: Add better message formatting
+
+if sys.version_info.major >= 3:
+	unicode = str
 
 # Good error format
 #
@@ -36,7 +39,7 @@ LoggingInterface  = collections.namedtuple("LoggingInterface",(
 IS_REPORTER  = True
 IS_INSTALLED = False
 
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 __doc__ = """
 The reporter module defines a simple interface to report errors that may occur
 during program execution. Errors are composed of the following property:
@@ -98,6 +101,25 @@ COLOR_CYAN_BOLD    = 16
 COLOR_LIGHT_GRAY   = 17
 COLOR_DARK_GRAY    = 18
 
+TEMPLATE_COMMAND = [
+	u"▶▶▶ {3}",
+	u"─── {3}",
+	u"    {3}",
+	u" !  {3}",
+	u"[!] {3}",
+	u"!!! {3}"
+
+]
+
+TEMPLATE_DEFAULT = [
+	u"▶▶▶ {0}│{2}│{3}",
+	u"─── {0}│{2}│{3}",
+	u" ┈  {0}│{2}│{3}",
+	u"WRN {0}│{2}│{3}",
+	u"ERR {0}│{2}│{3}",
+	u"!!! {0}│{2}│{3}"
+]
+
 # ------------------------------------------------------------------------------
 #
 # REPORTER
@@ -109,15 +131,8 @@ class Reporter:
 	"""Abstract class that defines the main (abstract) methods for an error
 	reporter."""
 
-	TEMPLATES = [
-		u"▶▶▶ {0}│{2}│{3}",
-		u"─── {0}│{2}│{3}",
-		u" ┈  {0}│{2}│{3}",
-		u"WRN {0}│{2}│{3}",
-		u"ERR {0}│{2}│{3}",
-		u"!!! {0}│{2}│{3}"
-	]
 
+	TEMPLATE = TEMPLATE_DEFAULT
 	INSTANCE = None
 
 	@classmethod
@@ -163,40 +178,40 @@ class Reporter:
 
 	def debug( self, message, component, code=None, color=None):
 		if DEBUG >= self.level:
-			self._send(DEBUG, self.TEMPLATES[DEBUG].format(self.timestamp(), code or "-", self._getComponent(component), message))
+			self._send(DEBUG, self.TEMPLATE[DEBUG].format(self.timestamp(), code or "-", self._getComponent(component), message))
 		return message
 
 	def trace( self, message, component, code=None, color=None ):
 		if TRACE >= self.level:
-			self._send(TRACE, self.TEMPLATES[TRACE].format(self.timestamp(), code or "-", self._getComponent(component), message))
+			self._send(TRACE, self.TEMPLATE[TRACE].format(self.timestamp(), code or "-", self._getComponent(component), message))
 		return message
 
 	def info( self, message, component, code=None, color=None ):
 		"""Sends an info with the given message (as a string) and
 		component (as a string)."""
 		if INFO >= self.level:
-			self._send(INFO, self.TEMPLATES[INFO].format(self.timestamp(), code or "-", self._getComponent(component), message), color=color)
+			self._send(INFO, self.TEMPLATE[INFO].format(self.timestamp(), code or "-", self._getComponent(component), message), color=color)
 		return message
 
 	def warning( self, message, component, code=None, color=None):
 		"""Sends a warning with the given message (as a string) and
 		component (as a string)."""
 		if WARNING >= self.level:
-			self._send(WARNING, self.TEMPLATES[WARNING].format(self.timestamp(), code or "-", self._getComponent(component), message))
+			self._send(WARNING, self.TEMPLATE[WARNING].format(self.timestamp(), code or "-", self._getComponent(component), message))
 		return message
 
 	def error( self, message, component, code=None, color=None ):
 		"""Sends an error with the given message (as a string) and
 		component (as a string)."""
 		if ERROR >= self.level:
-			self._send(ERROR, self.TEMPLATES[ERROR].format(self.timestamp(),code or "-", self._getComponent(component), message))
+			self._send(ERROR, self.TEMPLATE[ERROR].format(self.timestamp(),code or "-", self._getComponent(component), message))
 		return message
 
 	def fatal( self, message, component, code=None, color=None ):
 		"""Sends a fatal error with the given message (as a string) and
 		component (as a string)."""
 		if FATAL >= self.level:
-			self._send(FATAL, self.TEMPLATES[FATAL].format(self.timestamp(), code or "-", self._getComponent(component), message))
+			self._send(FATAL, self.TEMPLATE[FATAL].format(self.timestamp(), code or "-", self._getComponent(component), message))
 		return message
 
 	def _send( self, level, message, color=None ):
@@ -241,10 +256,10 @@ class FileReporter(Reporter):
 		if self.fd is None:
 			# We don't necessarily want this to be alway open
 			with file(self.path, "a") as fd:
-				fd.write(message.encode("utf8") + b"\n")
+				self.fd.write(message + "\n")
 				fd.flush()
 		else:
-			self.fd.write(message.encode("utf8") + b"\n")
+			self.fd.write(message + "\n")
 			self.fd.flush()
 
 # ------------------------------------------------------------------------------
@@ -540,7 +555,6 @@ def install( channel=None, level=TRACE ):
 	else:
 		return REPORTER.setLevel(level)
 
-
 def debug( message, component=None, code=None, color=None ):
 	return REPORTER.debug(message, component, code, color=color)
 
@@ -562,6 +576,10 @@ def error( message, component=None, code=None, color=None  ):
 def fatal( message, component=None, code=None, color=None  ):
 	return REPORTER.fatal(message, component, code, color=color)
 
+def template(templates):
+	Reporter.TEMPLATE = templates
+	return templates
+
 def bind( component, name=None):
 	"""Returns `(debug,trace,info,warning,error,fatal)` functions that take `(message,code=None)`
 	as parameters. This should be used in the following way, at the head of a
@@ -573,7 +591,7 @@ def bind( component, name=None):
 
 	>    info("Hello, world!")
 	"""
-	if   type(component) in (types.InstanceType,):
+	if   type(component) is object:
 		(component.debug,
 		component.trace,
 		component.info,
