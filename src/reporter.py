@@ -77,12 +77,14 @@ errors both on stderr and on XMPP:
 
 """
 
+PY_VERSION = int(sys.version_info.major)
 DEBUG    = 0
 TRACE    = 1
 INFO     = 2
-WARNING  = 3
-ERROR    = 4
-FATAL    = 5
+SUCCESS  = 3
+WARNING  = 4
+ERROR    = 5
+FATAL    = 6
 DEFAULT_LEVEL = 2
 
 COLOR_NONE         = -1
@@ -92,6 +94,7 @@ COLOR_GREEN        = 3
 COLOR_BLUE         = 4
 COLOR_MAGENTA      = 5
 COLOR_CYAN         = 6
+COLOR_YELLOW       = 7
 COLOR_BLACK_BOLD   = 11
 COLOR_RED_BOLD     = 12
 COLOR_GREEN_BOLD   = 13
@@ -101,24 +104,47 @@ COLOR_CYAN_BOLD    = 16
 COLOR_LIGHT_GRAY   = 17
 COLOR_DARK_GRAY    = 18
 
+TEMPLATE_COMPACT = [
+	u"{3}",
+	u"{3}",
+	u"{3}",
+	u"✔ {3}",
+	u"❗ {3}",
+	u"✘ {3}",
+	u"✋ {3}"
+]
+
 TEMPLATE_COMMAND = [
 	u"▶▶▶ {3}",
 	u"─── {3}",
 	u"    {3}",
+	u" ✔  {3}",
 	u" !  {3}",
 	u"[!] {3}",
 	u"!!! {3}"
-
 ]
 
 TEMPLATE_DEFAULT = [
 	u"▶▶▶ {0}│{2}│{3}",
 	u"─── {0}│{2}│{3}",
 	u" ┈  {0}│{2}│{3}",
+	u" ✔   {0}│{2}│{3}",
 	u"WRN {0}│{2}│{3}",
 	u"ERR {0}│{2}│{3}",
 	u"!!! {0}│{2}│{3}"
 ]
+
+def ensure_unicode( text ):
+	if PY_VERSION >= 3:
+		if isinstance(text, bytes):
+			return text.decode("utf8")
+		else:
+			return text
+	else:
+		if isinstance(text, str):
+			return text.decode("utf8")
+		else:
+			return text
 
 # ------------------------------------------------------------------------------
 #
@@ -147,8 +173,10 @@ class Reporter:
 		register(l)
 		return
 
-	def __init__( self, level=None ):
+	def __init__( self, level=None, template=None ):
 		self.delegates = []
+		if template:
+			self.TEMPLATE = template
 		self.setLevel(level if level is not None else DEFAULT_LEVEL)
 
 	def setLevel( self, level ):
@@ -178,11 +206,13 @@ class Reporter:
 
 	def debug( self, message, component, code=None, color=None):
 		if DEBUG >= self.level:
+			message = ensure_unicode(message)
 			self._send(DEBUG, self.TEMPLATE[DEBUG].format(self.timestamp(), code or "-", self._getComponent(component), message))
 		return message
 
 	def trace( self, message, component, code=None, color=None ):
 		if TRACE >= self.level:
+			message = ensure_unicode(message)
 			self._send(TRACE, self.TEMPLATE[TRACE].format(self.timestamp(), code or "-", self._getComponent(component), message))
 		return message
 
@@ -190,13 +220,23 @@ class Reporter:
 		"""Sends an info with the given message (as a string) and
 		component (as a string)."""
 		if INFO >= self.level:
+			message = ensure_unicode(message)
 			self._send(INFO, self.TEMPLATE[INFO].format(self.timestamp(), code or "-", self._getComponent(component), message), color=color)
+		return message
+
+	def error( self, message, component, code=None, color=None ):
+		"""Sends an success message (as a string) and
+		component (as a string)."""
+		if SUCCESS >= self.level:
+			message = ensure_unicode(message)
+			self._send(ERROR, self.TEMPLATE[SUCCESS].format(self.timestamp(),code or u"-", self._getComponent(component), message))
 		return message
 
 	def warning( self, message, component, code=None, color=None):
 		"""Sends a warning with the given message (as a string) and
 		component (as a string)."""
 		if WARNING >= self.level:
+			message = ensure_unicode(message)
 			self._send(WARNING, self.TEMPLATE[WARNING].format(self.timestamp(), code or "-", self._getComponent(component), message))
 		return message
 
@@ -204,13 +244,15 @@ class Reporter:
 		"""Sends an error with the given message (as a string) and
 		component (as a string)."""
 		if ERROR >= self.level:
-			self._send(ERROR, self.TEMPLATE[ERROR].format(self.timestamp(),code or "-", self._getComponent(component), message))
+			message = ensure_unicode(message)
+			self._send(ERROR, self.TEMPLATE[ERROR].format(self.timestamp(),code or u"-", self._getComponent(component), message))
 		return message
 
 	def fatal( self, message, component, code=None, color=None ):
 		"""Sends a fatal error with the given message (as a string) and
 		component (as a string)."""
 		if FATAL >= self.level:
+			message = ensure_unicode(message)
 			self._send(FATAL, self.TEMPLATE[FATAL].format(self.timestamp(), code or "-", self._getComponent(component), message))
 		return message
 
@@ -278,7 +320,8 @@ class ConsoleReporter(FileReporter):
 			COLOR_CYAN_BOLD,     # DEBUG
 			COLOR_LIGHT_GRAY,    # TRACE
 			COLOR_NONE,          # INFO
-			COLOR_MAGENTA_BOLD,  # WARNING
+			COLOR_GREEN_BOLD,    # SUCCESS
+			COLOR_YELLOW,        # WARNING
 			COLOR_RED,           # ERROR
 			COLOR_RED_BOLD,      # FATAL
 		]
@@ -324,6 +367,9 @@ class ConsoleReporter(FileReporter):
 			return ('[0m[00;35m')
 		elif color==COLOR_CYAN_BOLD:
 			return ('[0m[01;35m')
+		elif color==COLOR_YELLOW:
+			# FXIME: not right
+			return ('[0m[00;34m')
 		else:
 			raise Exception("ConsoleReporter._colorStart: Unsupported color", color)
 
@@ -576,11 +622,14 @@ def error( message, component=None, code=None, color=None  ):
 def fatal( message, component=None, code=None, color=None  ):
 	return REPORTER.fatal(message, component, code, color=color)
 
-def template(templates):
+def _template(templates):
 	Reporter.TEMPLATE = templates
 	return templates
 
-def bind( component, name=None):
+def template(templates):
+	return _template(templates)
+
+def bind( component, name=None, template=None):
 	"""Returns `(debug,trace,info,warning,error,fatal)` functions that take `(message,code=None)`
 	as parameters. This should be used in the following way, at the head of a
 	module:
@@ -591,16 +640,18 @@ def bind( component, name=None):
 
 	>    info("Hello, world!")
 	"""
+	if template: _template(template)
 	if   type(component) is object:
 		(component.debug,
 		component.trace,
 		component.info,
 		component.warning,
 		component.error,
-		component.fatal) = bind(name or component.__class__.__name__)
+		component.fatal) = bind(name or component.__class__.__name__, template=template)
 	elif type(component) in (str, unicode):
 		def wrap(function):
 			def _(*args,**kwargs):
+				args = list(ensure_unicode(_) for _ in args)
 				function(u" ".join(map(lambda _:u"{0}".format(_),args)), component, code=kwargs.get("code"), color=kwargs.get("color"))
 			return _
 		return LoggingInterface(
