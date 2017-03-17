@@ -298,10 +298,12 @@ class FileReporter(Reporter):
 		if self.fd is None:
 			# We don't necessarily want this to be alway open
 			with file(self.path, "a") as fd:
-				self.fd.write(message + "\n")
+				self.fd.write(message)
+				self.fd.write("\n")
 				fd.flush()
 		else:
-			self.fd.write(message + "\n")
+			self.fd.write(message)
+			self.fd.write("\n")
 			self.fd.flush()
 
 # ------------------------------------------------------------------------------
