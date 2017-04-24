@@ -33,7 +33,7 @@ if sys.version_info.major >= 3:
 
 # TODO: Mirror logging
 LoggingInterface  = collections.namedtuple("LoggingInterface",(
-	"debug", "trace", "info", "warning", "error", "fatal"
+	"debug", "trace", "info", "warn", "warning", "error", "fatal"
 ))
 
 IS_REPORTER  = True
@@ -232,6 +232,9 @@ class Reporter:
 			self._send(ERROR, self.TEMPLATE[SUCCESS].format(self.timestamp(),code or u"-", self._getComponent(component), message))
 		return message
 
+	def warn( self, message, component, code=None, color=None):
+		return self.warning( message, component, code, color)
+
 	def warning( self, message, component, code=None, color=None):
 		"""Sends a warning with the given message (as a string) and
 		component (as a string)."""
@@ -298,10 +301,15 @@ class FileReporter(Reporter):
 		if self.fd is None:
 			# We don't necessarily want this to be alway open
 			with file(self.path, "a") as fd:
-				self.fd.write(message + "\n")
+				self.fd.write(message)
+				self.fd.write("\n")
 				fd.flush()
 		else:
-			self.fd.write(message + "\n")
+			try:
+				self.fd.write(message)
+			except UnicodeEncodeError:
+				self.fd.write(message.encode("utf8"))
+			self.fd.write("\n")
 			self.fd.flush()
 
 # ------------------------------------------------------------------------------
@@ -658,6 +666,7 @@ def bind( component, name=None, template=None):
 			wrap(debug),
 			wrap(trace),
 			wrap(info),
+			wrap(warn),
 			wrap(warning),
 			wrap(error),
 			wrap(fatal)
