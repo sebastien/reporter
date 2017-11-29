@@ -14,7 +14,8 @@ import sys, smtplib, json, time, socket, types, string, collections
 # TODO: Add info
 # TODO: Add better message formatting
 
-if sys.version_info.major >= 3:
+PY_VERSION = sys.version_info.major
+if PY_VERSION >= 3:
 	unicode = str
 
 # Good error format
@@ -33,7 +34,7 @@ if sys.version_info.major >= 3:
 
 # TODO: Mirror logging
 LoggingInterface  = collections.namedtuple("LoggingInterface",(
-	"debug", "trace", "info", "warn", "warning", "error", "fatal"
+	"debug", "trace", "info", "warn", "warning", "error", "exception", "fatal"
 ))
 
 IS_REPORTER  = True
@@ -78,13 +79,14 @@ errors both on stderr and on XMPP:
 """
 
 PY_VERSION = int(sys.version_info.major)
-DEBUG    = 0
-TRACE    = 1
-INFO     = 2
-SUCCESS  = 3
-WARNING  = 4
-ERROR    = 5
-FATAL    = 6
+DEBUG     = 0
+TRACE     = 1
+INFO      = 2
+SUCCESS   = 3
+WARNING   = 4
+ERROR     = 5
+EXCEPTION = 6
+FATAL     = 7
 DEFAULT_LEVEL = 2
 
 COLOR_NONE         = -1
@@ -121,6 +123,7 @@ TEMPLATE_COMMAND = [
 	u" ✔  {3}",
 	u" !  {3}",
 	u"[!] {3}",
+	u" ⚡ {3}",
 	u"!!! {3}"
 ]
 
@@ -131,6 +134,7 @@ TEMPLATE_DEFAULT = [
 	u" ✔   {0}│{2}│{3}",
 	u"WRN {0}│{2}│{3}",
 	u"ERR {0}│{2}│{3}",
+	u" ⚡ {0}│{2}│{3}",
 	u"!!! {0}│{2}│{3}"
 ]
 
@@ -224,7 +228,7 @@ class Reporter:
 			self._send(INFO, self.TEMPLATE[INFO].format(self.timestamp(), code or "-", self._getComponent(component), message), color=color)
 		return message
 
-	def error( self, message, component, code=None, color=None ):
+	def success( self, message, component, code=None, color=None ):
 		"""Sends an success message (as a string) and
 		component (as a string)."""
 		if SUCCESS >= self.level:
@@ -249,6 +253,14 @@ class Reporter:
 		if ERROR >= self.level:
 			message = ensure_unicode(message)
 			self._send(ERROR, self.TEMPLATE[ERROR].format(self.timestamp(),code or u"-", self._getComponent(component), message))
+		return message
+
+	def exception( self, message, component, code=None, color=None ):
+		"""Sends an execption with the given message (as a string) and
+		component (as a string)."""
+		if EXCEPTION >= self.level:
+			message = ensure_unicode(message)
+			self._send(EXCEPTION, self.TEMPLATE[EXCEPTION].format(self.timestamp(),code or u"-", self._getComponent(component), message))
 		return message
 
 	def fatal( self, message, component, code=None, color=None ):
@@ -308,6 +320,7 @@ class FileReporter(Reporter):
 			try:
 				self.fd.write(message)
 			except UnicodeEncodeError:
+				# On Python 2- fds are binary
 				self.fd.write(message.encode("utf8"))
 			self.fd.write("\n")
 			self.fd.flush()
@@ -484,7 +497,7 @@ class XMPPReporter(Reporter):
 
 	def _send( self, level, message, color=None ):
 		for recipient in self.recipients:
-			iself._sendMessage(self.name, self.password, recipient, message)
+			self._sendMessage(self.name, self.password, recipient, message)
 
 # ------------------------------------------------------------------------------
 #
@@ -627,6 +640,9 @@ def warn( message, component=None, code=None, color=None  ):
 def error( message, component=None, code=None, color=None  ):
 	return REPORTER.error(message, component, code, color=color)
 
+def exception( message, component=None, code=None, color=None  ):
+	return REPORTER.exception(message, component, code, color=color)
+
 def fatal( message, component=None, code=None, color=None  ):
 	return REPORTER.fatal(message, component, code, color=color)
 
@@ -655,6 +671,7 @@ def bind( component, name=None, template=None):
 		component.info,
 		component.warning,
 		component.error,
+		component.exception,
 		component.fatal) = bind(name or component.__class__.__name__, template=template)
 	elif type(component) in (str, unicode):
 		def wrap(function):
@@ -669,6 +686,7 @@ def bind( component, name=None, template=None):
 			wrap(warn),
 			wrap(warning),
 			wrap(error),
+			wrap(exception),
 			wrap(fatal)
 		)
 	else:
