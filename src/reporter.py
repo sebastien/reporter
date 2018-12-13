@@ -692,8 +692,10 @@ def bind( component, name=None, template=None):
 	else:
 		raise Exception("reporter.bind: Unsupported type: %s" % (type(component)))
 
-if not IS_INSTALLED:
-	install()
+# NOTE: We don't install by default, as when the module is imported multiple times
+# from multiple locations, this results in duplicated messages.
+# if not IS_INSTALLED:
+# 	install()
 
 if __name__ == "__main__":
 	register(ConsoleReporter(), unique=True)
