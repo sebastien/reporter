@@ -1,22 +1,19 @@
-# Encoding: utf-8
+#!/usr/bin/env python
 # -----------------------------------------------------------------------------
 # Project   : Reporter
 # -----------------------------------------------------------------------------
-# Author    : Sebastien Pierre                            <sebastien@ffctn.com>
-# License   : BSD License                       <http://ffctn.com/licenses/bsd>
+# Author    : Sebastien Pierre                      <sebastien.piere@gmail.com>
+# License   : BSD License
 # -----------------------------------------------------------------------------
-# Creation  : 21-Sep-2009
-# Last mod  : 01-Jun-2016
+# Creation  : 2009-09-21
+# Last mod  : 2021-05-04
 # -----------------------------------------------------------------------------
 
-import sys, smtplib, json, time, socket, types, string, collections
+import sys, smtplib, json, time, socket, string, collections
+from typing import Union
 
 # TODO: Add info
 # TODO: Add better message formatting
-
-PY_VERSION = sys.version_info.major
-if PY_VERSION >= 3:
-	unicode = str
 
 # Good error format
 #
@@ -138,17 +135,8 @@ TEMPLATE_DEFAULT = [
 	u"!!! {0}│{2}│{3}"
 ]
 
-def ensure_unicode( text ):
-	if PY_VERSION >= 3:
-		if isinstance(text, bytes):
-			return text.decode("utf8")
-		else:
-			return text
-	else:
-		if isinstance(text, str):
-			return text.decode("utf8")
-		else:
-			return text
+def ensure_unicode( text:Union[str,bytes] ) -> str:
+	return str(text, "utf8") if isinstance(text,bytes) else text
 
 # ------------------------------------------------------------------------------
 #
@@ -160,7 +148,6 @@ def ensure_unicode( text ):
 class Reporter:
 	"""Abstract class that defines the main (abstract) methods for an error
 	reporter."""
-
 
 	TEMPLATE = TEMPLATE_DEFAULT
 	INSTANCE = None
@@ -352,7 +339,7 @@ class ConsoleReporter(FileReporter):
 		FileReporter._send(self, level, self._colorStart(color) + message + self._colorEnd(color))
 
 	def getColorForLevel( self, level ):
-		level = max(0, min(level, len(self.colorByLevel)))
+		level = max(0, min(level, len(self.colorByLevel) - 1))
 		return self.colorByLevel[level]
 
 	def _colorStart( self, color ):
@@ -673,7 +660,7 @@ def bind( component, name=None, template=None):
 		component.error,
 		component.exception,
 		component.fatal) = bind(name or component.__class__.__name__, template=template)
-	elif type(component) in (str, unicode):
+	elif isinstance(component, str):
 		def wrap(function):
 			def _(*args,**kwargs):
 				args = list(ensure_unicode(_) for _ in args)
